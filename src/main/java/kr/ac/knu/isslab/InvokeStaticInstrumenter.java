@@ -3,23 +3,22 @@ package kr.ac.knu.isslab;
 import soot.*;
 import soot.jimple.*;
 import soot.tagkit.LineNumberTag;
-import soot.tagkit.Tag;
 import soot.tagkit.StringTag;
+import soot.tagkit.Tag;
 import soot.util.Chain;
 
-import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-
 
 public class InvokeStaticInstrumenter extends BodyTransformer {
 
     static SootClass agentClass = Scene.v().loadClassAndSupport("com.finedigital.MyAgent");
     static SootMethod handleInstrumentedLocals = agentClass.getMethod(
-            "java.util.HashMap handleInstrumentedLocals(java.lang.String,long,java.util.HashMap,java.util.ArrayList)");
-    static SootMethod report = agentClass.getMethod("void report(java.util.HashMap)");
+            "java.util.HashMap handleInstrumentedLocals(java.lang.String,long,java.util.HashMap,java.util.ArrayList)"
+    );
     static SootMethod getMethodStackInfo = agentClass.getMethod("java.util.HashMap getMethodStackInfo(java.lang.Thread)");
-    
+    static SootMethod report = agentClass.getMethod("void report(java.util.HashMap)");
+
     private final AtomicInteger myRefCounter = new AtomicInteger(0);
     private final List<String> javaPrimitives = new ArrayList<>(Arrays.asList("int", "long", "float", "double", "char", "boolean"));
 
@@ -28,48 +27,58 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
     }
 
     private Local createNewLocal(Body body, String refKey, Type t) {
-        Local tmp = Jimple.v().newLocal(String.format("%s%d", refKey, myRefCounter.getAndAdd(1)), t);
+        Local tmp = Jimple.v().newLocal(
+                String.format("%s%d", refKey, myRefCounter.getAndAdd(1)),
+                t
+        );
         body.getLocals().add(tmp);
         return tmp;
     }
 
-    private Stmt printSootLogVirtual(String beforeafter, Body body, Stmt insertPointStmt, Local mapLocal) {
+    private void printSootLogVirtual(String beforeAfter, Body body, Stmt insertPointStmt, Local mapLocal) {
         UnitPatchingChain units = body.getUnits();
         List<Stmt> manipulatedStmtList = new ArrayList<>();
 
-        Stmt reportStmt = Jimple.v().newInvokeStmt(
-                Jimple.v().newStaticInvokeExpr(report.makeRef(), mapLocal));
-        manipulatedStmtList.add(reportStmt);
+        manipulatedStmtList.add(Jimple.v().newInvokeStmt(
+                        Jimple.v().newStaticInvokeExpr(
+                                report.makeRef(),
+                                mapLocal
+                        )
+                )
+        );
 
-        if (beforeafter.equals("before")) {
+        if (beforeAfter.equals("before")) {
             units.insertBefore(manipulatedStmtList, insertPointStmt);
-        } else if (beforeafter.equals("after")) {
+        } else if (beforeAfter.equals("after")) {
             units.insertAfter(manipulatedStmtList, insertPointStmt);
-            insertPointStmt = getLastElem(manipulatedStmtList);
         }
-        return insertPointStmt;
     }
 
     private List<Object> makeAttributesList(Body body, Stmt insertPointStmt) {
         UnitPatchingChain units = body.getUnits();
         List<Stmt> manipulatedStmtList = new ArrayList<>();
 
-        Local attrListLocal = createNewLocal(body, "li", RefType.v("java.util.ArrayList"));
-        Stmt attrListStmt = Jimple.v().newAssignStmt(
-                attrListLocal,
-                Jimple.v().newNewExpr(RefType.v("java.util.ArrayList")));
-        manipulatedStmtList.add(attrListStmt);
-
-        Stmt initAtrrListLocalStmt = Jimple.v().newInvokeStmt(
-                Jimple.v().newSpecialInvokeExpr(
+        Local attrListLocal = createNewLocal(
+                body,
+                "li",
+                RefType.v("java.util.ArrayList")
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
                         attrListLocal,
-                        Scene.v().getMethod("<java.util.ArrayList: void <init>()>").makeRef()));
-        manipulatedStmtList.add(initAtrrListLocalStmt);
-
+                        Jimple.v().newNewExpr(RefType.v("java.util.ArrayList"))
+                )
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newInvokeStmt(
+                        Jimple.v().newSpecialInvokeExpr(
+                                attrListLocal,
+                                Scene.v().getMethod("<java.util.ArrayList: void <init>()>").makeRef()
+                        )
+                )
+        );
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        return Arrays.asList(insertPointStmt, attrListLocal);
+        return Arrays.asList(getLastElem(manipulatedStmtList), attrListLocal);
     }
 
     private List<Object> handleSootValue(Body body, Stmt insertPointStmt, String type, Value value) {
@@ -83,39 +92,50 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
         } else if (type.equals("byte") || type.equals("short")) {
             appendArgType = "int";
             Local toInt = createNewLocal(body, "i", IntType.v());
-            Stmt toIntCastStmt = Jimple.v().newAssignStmt(
-                    toInt,
-                    Jimple.v().newCastExpr(value, IntType.v()));
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
+                            toInt,
+                            Jimple.v().newCastExpr(
+                                    value,
+                                    IntType.v()
+                            )
+                    )
+            );
             value = toInt;
-            manipulatedStmtList.add(toIntCastStmt);
         } else if (type.equals("java.lang.String") || type.equals("java/lang/String")) {
             appendArgType = "java.lang.String";
         }
 
-        // String paramValue = new StringBuilder(paramValue).toString();
-        Local paramValueSbLocal = createNewLocal(body, "sb", RefType.v("java.lang.StringBuilder"));
-        Stmt newParamValueSbStmt = Jimple.v().newAssignStmt(
-                paramValueSbLocal,
-                Jimple.v().newNewExpr(RefType.v("java.lang.StringBuilder")));
-        manipulatedStmtList.add(newParamValueSbStmt);
-
-        Stmt initParamValueSbStmt = Jimple.v().newInvokeStmt(
-                Jimple.v().newSpecialInvokeExpr(
+        Local paramValueSbLocal = createNewLocal(
+                body,
+                "sb",
+                RefType.v("java.lang.StringBuilder")
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
                         paramValueSbLocal,
-                        Scene.v().getMethod("<java.lang.StringBuilder: void <init>()>").makeRef()));
-        manipulatedStmtList.add(initParamValueSbStmt);
-
-        Stmt paramValueSbAppendStmt = Jimple.v().newInvokeStmt(
-                Jimple.v().newVirtualInvokeExpr(
-                        paramValueSbLocal,
-                        Scene.v().getMethod(String.format("<java.lang.StringBuilder: java.lang.StringBuilder append(%s)>", appendArgType)).makeRef(),
-                        value));
-        manipulatedStmtList.add(paramValueSbAppendStmt);
+                        Jimple.v().newNewExpr(RefType.v("java.lang.StringBuilder"))
+                )
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newInvokeStmt(
+                        Jimple.v().newSpecialInvokeExpr(
+                                paramValueSbLocal,
+                                Scene.v().getMethod("<java.lang.StringBuilder: void <init>()>").makeRef()
+                        )
+                )
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newInvokeStmt(
+                        Jimple.v().newVirtualInvokeExpr(
+                                paramValueSbLocal,
+                                Scene.v().getMethod(String.format("<java.lang.StringBuilder: java.lang.StringBuilder append(%s)>", appendArgType)).makeRef(),
+                                value)
+                )
+        );
 
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        return Arrays.asList(insertPointStmt, paramValueSbLocal);
+        return Arrays.asList(getLastElem(manipulatedStmtList), paramValueSbLocal);
     }
 
     private Stmt addParamInfoIntoAttrList(Body body, Local attrListLocal, Stmt insertPointStmt, List<IdentityStmt> parameterList) {
@@ -129,52 +149,64 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
 
         for (IdentityStmt s: parameterList) {
             Local mapLocal = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
-            Stmt newMapStmt = Jimple.v().newAssignStmt(
-                    mapLocal,
-                    Jimple.v().newNewExpr(RefType.v("java.util.HashMap")));
-            manipulatedStmtList.add(newMapStmt);
-
-            Stmt initMapStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newSpecialInvokeExpr(
-                            mapLocal, Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef()));
-            manipulatedStmtList.add(initMapStmt);
-
-            Stmt mapPutTypeStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newVirtualInvokeExpr(
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
                             mapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
-                            StringConstant.v("type"), StringConstant.v(s.getRightOp().toString())));
-            manipulatedStmtList.add(mapPutTypeStmt);
+                            Jimple.v().newNewExpr(RefType.v("java.util.HashMap"))
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newSpecialInvokeExpr(
+                                    mapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef()
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newVirtualInvokeExpr(
+                                    mapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
+                                    StringConstant.v("type"),
+                                    StringConstant.v(s.getRightOp().toString())
+                            )
+                    )
+            );
 
             Value paramValue = s.getLeftOp();
             String paramType = paramValue.getType().toString();
 
             List<Object> ret = handleSootValue(body, insertPointStmt, paramType, paramValue);
             insertPointStmt = (Stmt) ret.get(0);
+
             Local paramValueSbLocal = (Local) ret.get(1);
-
-            Stmt mapPutValueStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newVirtualInvokeExpr(
-                            mapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
-                            StringConstant.v("value"), paramValueSbLocal));
-            manipulatedStmtList.add(mapPutValueStmt);
-
-            Stmt listPutStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newInterfaceInvokeExpr(
-                            attrListLocal,
-                            Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
-                            mapLocal));
-            manipulatedStmtList.add(listPutStmt);
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newVirtualInvokeExpr(
+                                    mapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
+                                    StringConstant.v("value"),
+                                    paramValueSbLocal
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newInterfaceInvokeExpr(
+                                    attrListLocal,
+                                    Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
+                                    mapLocal
+                            )
+                    )
+            );
         }
 
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        return insertPointStmt;
+        return getLastElem(manipulatedStmtList);
     }
 
-    private Stmt addMethodEntryLog(Body body, Local startAtLocal, Local threadStrRef, Stmt insertPointStmt, List<IdentityStmt> parameterList){
+    private void addMethodEntryLog(Body body, Local startAtLocal, Local threadStrRef, Stmt insertPointStmt, List<IdentityStmt> parameterList){
         UnitPatchingChain units = body.getUnits();
         List<Stmt> manipulatedStmtList = new ArrayList<>();
 
@@ -183,35 +215,42 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
             List<Object> ret = makeAttributesList(body, insertPointStmt);
             insertPointStmt = (Stmt) ret.get(0);
             attrListLocal = (Local) ret.get(1);
-            insertPointStmt = addParamInfoIntoAttrList(body, attrListLocal, insertPointStmt, parameterList);
+            insertPointStmt = addParamInfoIntoAttrList(
+                    body,
+                    attrListLocal,
+                    insertPointStmt,
+                    parameterList
+            );
         }
 
         Local methodEntryMap = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
         StaticInvokeExpr expr;
         if (attrListLocal == null) {
             expr = Jimple.v().newStaticInvokeExpr(
-                handleInstrumentedLocals.makeRef(),
-                StringConstant.v("Method Start"), 
-                startAtLocal, 
-                threadStrRef, 
-                NullConstant.v()
+                    handleInstrumentedLocals.makeRef(),
+                    StringConstant.v("Method Start"),
+                    startAtLocal,
+                    threadStrRef,
+                    NullConstant.v()
             );
         } else {
             expr = Jimple.v().newStaticInvokeExpr(
-                handleInstrumentedLocals.makeRef(),    
-                StringConstant.v("Method Start"), 
-                startAtLocal, 
-                threadStrRef, 
-                attrListLocal
+                    handleInstrumentedLocals.makeRef(),
+                    StringConstant.v("Method Start"),
+                    startAtLocal,
+                    threadStrRef,
+                    attrListLocal
             );
         }
-        Stmt methodEntryMapStmt = Jimple.v().newAssignStmt(methodEntryMap, expr);
-        manipulatedStmtList.add(methodEntryMapStmt);
+        manipulatedStmtList.add(Jimple.v().newAssignStmt(methodEntryMap, expr));
 
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        return printSootLogVirtual("after", body, insertPointStmt, methodEntryMap);
+        printSootLogVirtual(
+                "after",
+                body,
+                getLastElem(manipulatedStmtList),
+                methodEntryMap
+        );
     }
 
     private void redirectPrintStream(Body body, Local startAtLocal, Local threadStrRef, Stmt insertPointStmt, InvokeExpr expr) {
@@ -223,25 +262,37 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
         Local attrListLocal = (Local) ret.get(1);
 
         for (Value val: expr.getArgs()) {
-            Stmt listPutStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newInterfaceInvokeExpr(
-                            attrListLocal,
-                            Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
-                            val));
-            manipulatedStmtList.add(listPutStmt);
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newInterfaceInvokeExpr(
+                                    attrListLocal,
+                                    Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
+                                    val
+                            )
+                    )
+            );
         }
 
         Local printStreamMap = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
-        Stmt printStreamMapStmt = Jimple.v().newAssignStmt(
-                printStreamMap,
-                Jimple.v().newStaticInvokeExpr(handleInstrumentedLocals.makeRef(),
-                        StringConstant.v("From PrintStream"), startAtLocal, threadStrRef, attrListLocal));
-        manipulatedStmtList.add(printStreamMapStmt);
-
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
+                        printStreamMap,
+                        Jimple.v().newStaticInvokeExpr(
+                                handleInstrumentedLocals.makeRef(),
+                                StringConstant.v("From PrintStream"),
+                                startAtLocal,
+                                threadStrRef,
+                                attrListLocal
+                        )
+                )
+        );
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        printSootLogVirtual("after", body, insertPointStmt, printStreamMap);
+        printSootLogVirtual(
+                "after",
+                body,
+                getLastElem(manipulatedStmtList),
+                printStreamMap
+        );
     }
 
     private void addLogicBranchLog(Body body, Local startAtLocal, Local threadStrRef, Stmt branchStmt, String branch) {
@@ -251,23 +302,42 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
 
         Local logicBranchMap = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
 
-        String msg = String.format("Ln [%d]: Branch: %s: %s",
+        String msg = String.format(
+                "Ln [%d]: Branch: %s: %s",
                 ((LineNumberTag) branchStmt.getTag("LineNumberTag")).getLineNumber(),
                 ((IfStmt) branchStmt).getCondition().toString(),
-                branch);
-        manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                logicBranchMap,
-                Jimple.v().newStaticInvokeExpr(handleInstrumentedLocals.makeRef(),
-                        StringConstant.v(msg), startAtLocal, threadStrRef, NullConstant.v())));
+                branch
+        );
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
+                        logicBranchMap,
+                        Jimple.v().newStaticInvokeExpr(
+                                handleInstrumentedLocals.makeRef(),
+                                StringConstant.v(msg),
+                                startAtLocal,
+                                threadStrRef,
+                                NullConstant.v()
+                        )
+                )
+        );
 
         if (branch.equals("true")) {
             units.insertAfter(manipulatedStmtList, insertPointStmt);
-            insertPointStmt = getLastElem(manipulatedStmtList);
-            printSootLogVirtual("after", body, insertPointStmt, logicBranchMap);
+            printSootLogVirtual(
+                    "after",
+                    body,
+                    getLastElem(manipulatedStmtList),
+                    logicBranchMap
+            );
         } else {
             insertPointStmt = ((IfStmt) branchStmt).getTarget();
             units.insertBefore(manipulatedStmtList, insertPointStmt);
-            printSootLogVirtual("before", body, insertPointStmt, logicBranchMap);
+            printSootLogVirtual(
+                    "before",
+                    body,
+                    insertPointStmt,
+                    logicBranchMap
+            );
         }
     }
 
@@ -278,17 +348,32 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
 
         String msg = "";
         LineNumberTag tag = (LineNumberTag) t.getBeginUnit().getTag("LineNumberTag");
-        if (tag != null) { msg += String.format("Ln [%d]: ", tag.getLineNumber()); }
+        if (tag != null) {
+            msg += String.format("Ln [%d]: ", tag.getLineNumber());
+        }
         msg += String.format("Catch %s", t.getException());
 
-        manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                exceptionhMap,
-                Jimple.v().newStaticInvokeExpr(handleInstrumentedLocals.makeRef(),
-                        StringConstant.v(msg), startAtLocal, threadStrRef, NullConstant.v())));
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
+                        exceptionhMap,
+                        Jimple.v().newStaticInvokeExpr(
+                                handleInstrumentedLocals.makeRef(),
+                                StringConstant.v(msg),
+                                startAtLocal,
+                                threadStrRef,
+                                NullConstant.v()
+                        )
+                )
+        );
 
         Stmt insertPointStmt = (Stmt) t.getHandlerUnit();
         units.insertBefore(manipulatedStmtList, insertPointStmt);
-        printSootLogVirtual("before", body, insertPointStmt, exceptionhMap);
+        printSootLogVirtual(
+                "before",
+                body,
+                insertPointStmt,
+                exceptionhMap
+        );
     }
 
     private void addMethodExitLog(Body body, Local startAtLocal, Local threadStrRef, Stmt insertPointStmt, Stmt stmt) {
@@ -303,24 +388,36 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
             ReturnStmt returnStmt = (ReturnStmt) stmt;
 
             Local returnMapLocal = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
-            Stmt newReturnMapStmt = Jimple.v().newAssignStmt(
-                    returnMapLocal, Jimple.v().newNewExpr(RefType.v("java.util.HashMap")));
-            manipulatedStmtList.add(newReturnMapStmt);
-
-            Stmt initReturnMapStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newSpecialInvokeExpr(
-                            returnMapLocal, Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef()));
-            manipulatedStmtList.add(initReturnMapStmt);
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
+                            returnMapLocal,
+                            Jimple.v().newNewExpr(
+                                    RefType.v("java.util.HashMap")
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newSpecialInvokeExpr(
+                                    returnMapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef()
+                            )
+                    )
+            );
 
             Value returnValue = returnStmt.getOp();
             String returnType = returnValue.getType().toString();
 
-            Stmt returnMapPutTypeStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newVirtualInvokeExpr(
-                            returnMapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
-                            StringConstant.v("type"), StringConstant.v(returnType)));
-            manipulatedStmtList.add(returnMapPutTypeStmt);
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newVirtualInvokeExpr(
+                                    returnMapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
+                                    StringConstant.v("type"),
+                                    StringConstant.v(returnType)
+                            )
+                    )
+            );
 
             units.insertAfter(manipulatedStmtList, insertPointStmt);
             insertPointStmt = getLastElem(manipulatedStmtList);
@@ -330,70 +427,115 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
             insertPointStmt = (Stmt) ret2.get(0);
             Local returnValueSbLocal = (Local) ret2.get(1);
 
-            Stmt returnMapPutValueStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newVirtualInvokeExpr(
-                            returnMapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
-                            StringConstant.v("value"), returnValueSbLocal));
-            manipulatedStmtList.add(returnMapPutValueStmt);
-
-            Stmt listPutStmt = Jimple.v().newInvokeStmt(
-                    Jimple.v().newInterfaceInvokeExpr(
-                            attrListLocal,
-                            Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
-                            returnMapLocal));
-            manipulatedStmtList.add(listPutStmt);
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newVirtualInvokeExpr(
+                                    returnMapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
+                                    StringConstant.v("value"),
+                                    returnValueSbLocal
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newInterfaceInvokeExpr(
+                                    attrListLocal,
+                                    Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
+                                    returnMapLocal
+                            )
+                    )
+            );
         }
 
         if (body.getMethod().getName().equals("channelReadComplete")) {
             Local elapsedTimeMapLocal = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
-            manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                    elapsedTimeMapLocal,
-                    Jimple.v().newNewExpr(RefType.v("java.util.HashMap"))));
-
-            manipulatedStmtList.add(Jimple.v().newInvokeStmt(
-                    Jimple.v().newSpecialInvokeExpr(
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
                             elapsedTimeMapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef())));
+                            Jimple.v().newNewExpr(
+                                    RefType.v("java.util.HashMap")
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newSpecialInvokeExpr(
+                                    elapsedTimeMapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: void <init>()>").makeRef()
+                            )
+                    )
+            );
 
             Local endAtLocal = createNewLocal(body, "tiEndAt", LongType.v());
-            manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                    endAtLocal,
-                    Jimple.v().newStaticInvokeExpr(Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>").makeRef())));
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
+                            endAtLocal,
+                            Jimple.v().newStaticInvokeExpr(
+                                    Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>").makeRef()
+                            )
+                    )
+            );
 
             Local elapsedLocal = createNewLocal(body, "tiElapsed", LongType.v());
-            manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                    elapsedLocal,
-                    Jimple.v().newSubExpr(endAtLocal, startAtLocal)));
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
+                            elapsedLocal,
+                            Jimple.v().newSubExpr(endAtLocal, startAtLocal)
+                    )
+            );
 
             Local elapsedStrLocal = createNewLocal(body, "str", RefType.v("java.lang.String"));
-            manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                    elapsedStrLocal,
-                    Jimple.v().newStaticInvokeExpr(Scene.v().getMethod("<java.lang.String: java.lang.String valueOf(long)>").makeRef(), elapsedLocal)));
-
-            manipulatedStmtList.add(Jimple.v().newInvokeStmt(
-                    Jimple.v().newVirtualInvokeExpr(
-                            elapsedTimeMapLocal,
-                            Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
-                            StringConstant.v("Elapsed Time (ms)"), elapsedStrLocal)));
-
-            manipulatedStmtList.add(Jimple.v().newInvokeStmt(
-                    Jimple.v().newInterfaceInvokeExpr(
-                            attrListLocal,
-                            Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
-                            elapsedTimeMapLocal)));
+            manipulatedStmtList.add(
+                    Jimple.v().newAssignStmt(
+                            elapsedStrLocal,
+                            Jimple.v().newStaticInvokeExpr(
+                                    Scene.v().getMethod("<java.lang.String: java.lang.String valueOf(long)>").makeRef(),
+                                    elapsedLocal
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newVirtualInvokeExpr(
+                                    elapsedTimeMapLocal,
+                                    Scene.v().getMethod("<java.util.HashMap: java.lang.Object put(java.lang.Object,java.lang.Object)>").makeRef(),
+                                    StringConstant.v("Elapsed Time (ms)"),
+                                    elapsedStrLocal
+                            )
+                    )
+            );
+            manipulatedStmtList.add(
+                    Jimple.v().newInvokeStmt(
+                            Jimple.v().newInterfaceInvokeExpr(
+                                    attrListLocal,
+                                    Scene.v().getMethod("<java.util.List: boolean add(java.lang.Object)>").makeRef(),
+                                    elapsedTimeMapLocal
+                            )
+                    )
+            );
         }
 
         Local methodExitMap = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
-        manipulatedStmtList.add(Jimple.v().newAssignStmt(
-                methodExitMap,
-                Jimple.v().newStaticInvokeExpr(handleInstrumentedLocals.makeRef(),
-                        StringConstant.v("Method End"), startAtLocal, threadStrRef, attrListLocal)));
-
+        manipulatedStmtList.add(
+                Jimple.v().newAssignStmt(
+                        methodExitMap,
+                        Jimple.v().newStaticInvokeExpr(
+                                handleInstrumentedLocals.makeRef(),
+                                StringConstant.v("Method End"),
+                                startAtLocal,
+                                threadStrRef,
+                                attrListLocal
+                        )
+                )
+        );
         units.insertAfter(manipulatedStmtList, insertPointStmt);
-        insertPointStmt = getLastElem(manipulatedStmtList);
-
-        printSootLogVirtual("after", body, insertPointStmt, methodExitMap);
+        printSootLogVirtual(
+                "after",
+                body,
+                getLastElem(manipulatedStmtList),
+                methodExitMap
+        );
     }
 
     protected void internalTransform(Body body, String phase, Map options) {
@@ -412,21 +554,28 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
 
         Iterator<Unit> stmtIt = units.snapshotIterator();
         List<IdentityStmt> parameterList = new ArrayList<>();
+
         while (stmtIt.hasNext()) {
             Stmt stmt = (Stmt) stmtIt.next();
             if ((stmt instanceof IdentityStmt) && (stmt.toString().contains("@parameter"))) {
                 parameterList.add((IdentityStmt) stmt);
                 firstStmt = stmt;
             }
-            if (stmt.toString().contains("<init>")) { initInvokeStmt = stmt; }
+            if (stmt.toString().contains("<init>")) {
+                initInvokeStmt = stmt;
+            }
         }
-        if (isInit) { firstStmt = initInvokeStmt; }
+        if (isInit) {
+            firstStmt = initInvokeStmt;
+        }
 
         Local startAtLocal = createNewLocal(body, "tiStartAt", LongType.v());
         Stmt startAtStmt = Jimple.v().newAssignStmt(
                 startAtLocal,
                 Jimple.v().newStaticInvokeExpr(
-                        Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>").makeRef()));
+                        Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>").makeRef()
+                )
+        );
         units.insertAfter(startAtStmt, firstStmt);
         firstStmt = startAtStmt;
 
@@ -434,18 +583,23 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
         Stmt currentThreadStmt = Jimple.v().newAssignStmt(
                 currentThreadRef,
                 Jimple.v().newStaticInvokeExpr(
-                        Scene.v().getMethod("<java.lang.Thread: java.lang.Thread currentThread()>").makeRef()));
+                        Scene.v().getMethod("<java.lang.Thread: java.lang.Thread currentThread()>").makeRef()
+                )
+        );
         units.insertAfter(currentThreadStmt, firstStmt);
         firstStmt = currentThreadStmt;
 
         Local threadStrRef = createNewLocal(body, "map", RefType.v("java.util.HashMap"));
         Stmt threadStrStmt = Jimple.v().newAssignStmt(
                 threadStrRef,
-                Jimple.v().newStaticInvokeExpr(getMethodStackInfo.makeRef(), currentThreadRef));
+                Jimple.v().newStaticInvokeExpr(
+                        getMethodStackInfo.makeRef(),
+                        currentThreadRef
+                )
+        );
         units.insertAfter(threadStrStmt, firstStmt);
         firstStmt = threadStrStmt;
-
-        firstStmt = addMethodEntryLog(body, startAtLocal, threadStrRef, firstStmt, parameterList);
+        addMethodEntryLog(body, startAtLocal, threadStrRef, firstStmt, parameterList);
 
         stmtIt = units.snapshotIterator();
         while (stmtIt.hasNext()) {
@@ -466,9 +620,10 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
         while (stmtIt.hasNext()) {
             Stmt stmt = (Stmt) stmtIt.next();
             if (!(stmt instanceof IfStmt)) { continue; }
-            IfStmt thisIfStmt = (IfStmt) stmt;
 
+            IfStmt thisIfStmt = (IfStmt) stmt;
             boolean isIfStmtFromOrigin = false;
+
             for (Tag t: thisIfStmt.getTags()) {
                 if (!t.getName().equals("StringTag")) { continue; }
                 isIfStmtFromOrigin |= ((StringTag) t).getInfo().equals("MyAgent");

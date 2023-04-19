@@ -5,11 +5,12 @@ MANIPULATOR_DIR := $(WORKING_DIR)
 MANIPULATOR_OUT_DIR := $(WORKING_DIR)/manipulated
 PACKAGE_NAME_AS_DIR := $(subst .,/,$(PACKAGE_NAME))
 AGENT_DIR := ./src/main/java/$(PACKAGE_NAME_AS_DIR)
+DOTFILE := ./callgraph.dot
 
 CLASS_PATHS := $(MANIPULATOR_DIR)/target/soot_profiler-1.0-SNAPSHOT-jar-with-dependencies.jar:$(SOURCE_DIR)/target/classes:./target/classes kr.ac.knu.isslab.MainDriver
 SOOT_OPTIONS := -w -process-dir $(SOURCE_DIR)/target/classes -keep-line-number -d $(MANIPULATOR_OUT_DIR)
 
-objects = $(WORKING_DIR) $(MANIPULATOR_DIR) $(MANIPULATOR_OUT_DIR)
+objects = $(WORKING_DIR) $(MANIPULATOR_DIR) $(MANIPULATOR_OUT_DIR) $(AGENT_DIR)
 
 .PHONY: logo
 logo:
@@ -98,4 +99,7 @@ clean:
 	@if [ -d "${MANIPULATOR_DIR}" ]; then \
 		mvn -f ${MANIPULATOR_DIR} clean; \
 	fi
+	@if [ -f "${DOTFILE}" ]; then \
+    	rm $(DOTFILE); \
+    fi
 	@echo ""

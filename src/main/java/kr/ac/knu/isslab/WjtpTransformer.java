@@ -23,7 +23,6 @@ public class WjtpTransformer extends SceneTransformer {
 //        SootClass mainClass = Scene.v().getSootClass("com.finedigital.ApplicationLoader");
         System.out.println("WjtpTransformer: internalTransform: mainClass: " + mainClass);
         SootMethod src = mainClass.getMethodByName("main");
-//        SootMethod src = mainClass.getMethodByName("run");
         System.out.println("WjtpTransformer: internalTransform: src: " + src);
 
         Options.v().set_main_class(src.getSignature());
@@ -35,21 +34,11 @@ public class WjtpTransformer extends SceneTransformer {
 
         DotGraph dotGraph = new DotGraph("callgraph");
 
-        int i = 0;
-        float percentage = 0;
-        for (Edge edge : callGraph) { // edgesOutOf(src)
+        for (Edge edge : callGraph) {
             SootMethod edgeSrc = (SootMethod) edge.getSrc();
             SootMethod edgeTgt = (SootMethod) edge.getTgt();
             if (!edgeSrc.getDeclaringClass().getName().contains("com.finedigital") && !edgeTgt.getDeclaringClass().getName().contains("com.finedigital")) {
-                System.out.println("Skip this edge: " + edgeSrc + " -> " + edgeTgt);
                 continue;
-            }
-            System.out.println("Add this edge: " + edgeSrc + " -> " + edgeTgt);
-
-            percentage = (float) i++ / callGraphSize;
-            if (percentage % 0.5 == 0) {
-                System.out.printf("WjtpTransformer: internalTransform: edge %d/%d(%.2f%%): %s -> %s\n",
-                        i, callGraphSize, percentage, edgeSrc, edgeTgt);
             }
             dotGraph.drawEdge(edgeSrc.toString(), edgeTgt.toString());
         }
