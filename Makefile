@@ -3,6 +3,8 @@ include .env
 WORKING_DIR := $(shell pwd)
 MANIPULATOR_DIR := $(WORKING_DIR)
 MANIPULATOR_OUT_DIR := $(WORKING_DIR)/manipulated
+PACKAGE_NAME_AS_DIR := $(subst .,/,$(PACKAGE_NAME))
+AGENT_DIR := ./src/main/java/$(PACKAGE_NAME_AS_DIR)
 
 CLASS_PATHS := $(MANIPULATOR_DIR)/target/soot_profiler-1.0-SNAPSHOT-jar-with-dependencies.jar:$(SOURCE_DIR)/target/classes:./target/classes kr.ac.knu.isslab.MainDriver
 SOOT_OPTIONS := -w -process-dir $(SOURCE_DIR)/target/classes -keep-line-number -d $(MANIPULATOR_OUT_DIR)
@@ -43,6 +45,7 @@ envs:
 	@echo "MANIPULATOR_DIR: $(MANIPULATOR_DIR)"
 	@echo "MANIPULATOR_OUT_DIR: $(MANIPULATOR_OUT_DIR)"
 	@echo "CLASS_PATHS: $(CLASS_PATHS)"
+	@echo "AGENT_DIR: $(AGENT_DIR)"
 	@echo ""
 
 .PHONY: header
@@ -56,6 +59,7 @@ check-result-dir::
 
 config: header check-result-dir
 	@echo "Configuration:"
+	@bash resources/configure.sh $(PACKAGE_NAME)
 	@echo ""
 
 pre-build: clean config $(objects)
@@ -75,14 +79,23 @@ build-jimple: pre-build
 
 package: build
 	@echo "Package:"
-	@cp $(MANIPULATOR_DIR)/target/classes/com/finedigital/MyAgent*.class $(MANIPULATOR_OUT_DIR)/com/finedigital; \
+	@cp $(MANIPULATOR_DIR)/target/classes/$(PACKAGE_NAME_AS_DIR)/MyAgent*.class $(MANIPULATOR_OUT_DIR)/$(PACKAGE_NAME_AS_DIR); \
 	cp -r $(MANIPULATOR_OUT_DIR)/com $(SOURCE_DIR)/target/classes; mvn -f $(SOURCE_DIR) package -Dmaven.compile.skip=true;
 	@echo ""
 
 .PHONY: clean
-clean: config $(objects)
+clean:
 	@echo "Clean these directories: $(objects)"
-	rm -rf ${MANIPULATOR_OUT_DIR}
-	mvn -f ${SOURCE_DIR} clean
-	mvn -f ${MANIPULATOR_DIR} clean
+	@if [ -d "${MANIPULATOR_OUT_DIR}" ]; then \
+		rm -rf ${MANIPULATOR_OUT_DIR}; \
+	fi
+	@if [ -d "${AGENT_DIR}" ]; then \
+		rm -rf ${AGENT_DIR}; \
+	fi
+	@if [ -d "${SOURCE_DIR}" ]; then \
+		mvn -f ${SOURCE_DIR} clean; \
+	fi
+	@if [ -d "${MANIPULATOR_DIR}" ]; then \
+		mvn -f ${MANIPULATOR_DIR} clean; \
+	fi
 	@echo ""
