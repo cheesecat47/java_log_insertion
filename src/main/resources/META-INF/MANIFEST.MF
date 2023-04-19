@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Created-By: Apache Maven ${maven.version}
+Build-Jdk: ${java.version}
+Main-Class: kr.ac.knu.isslab.MainDriver
