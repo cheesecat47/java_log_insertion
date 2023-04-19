@@ -1,5 +1,7 @@
 # java_log_insertion
 
+[![Java CI with Maven](https://github.com/cheesecat47/java_log_insertion/actions/workflows/maven.yml/badge.svg)](https://github.com/cheesecat47/java_log_insertion/actions/workflows/maven.yml)
+
 ## Dependencies
 
 |       | Version | Note |

@@ -78,7 +78,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        kr.ac.knu.isslab.MainDriver
+                                        kr.ac.knu.isslab.Main
                                     </mainClass>
                                 </manifest>
                             </archive>

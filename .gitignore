@@ -28,8 +28,17 @@ hs_err_pid*
 *.iml
 *.ipr
 
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
 ### VS Code ###
 .vscode/
+.idea/
 
 ### MacOS
 .DS_Store
