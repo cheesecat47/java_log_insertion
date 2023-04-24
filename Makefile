@@ -60,7 +60,7 @@ check-result-dir::
 
 config: header check-result-dir
 	@echo "Configuration:"
-	@bash resources/configure.sh $(PACKAGE_NAME)
+	@bash resources/configure.sh $(PACKAGE_NAME) $(WORKING_DIR)
 	@echo ""
 
 pre-build: clean config $(objects)
@@ -100,6 +100,6 @@ clean:
 		mvn -f ${MANIPULATOR_DIR} clean; \
 	fi
 	@if [ -f "${DOTFILE}" ]; then \
-    	rm $(DOTFILE); \
+    	rm $(DOTFILE)*; \
     fi
 	@echo ""

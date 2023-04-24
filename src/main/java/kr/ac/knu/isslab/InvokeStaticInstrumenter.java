@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class InvokeStaticInstrumenter extends BodyTransformer {
 
-    static SootClass agentClass = Scene.v().loadClassAndSupport("com.finedigital.MyAgent");
+    static SootClass agentClass = Scene.v().loadClassAndSupport("PACKAGENAME.MyAgent");
     static SootMethod handleInstrumentedLocals = agentClass.getMethod(
             "java.util.HashMap handleInstrumentedLocals(java.lang.String,long,java.util.HashMap,java.util.ArrayList)"
     );
@@ -542,7 +542,7 @@ public class InvokeStaticInstrumenter extends BodyTransformer {
         UnitPatchingChain units = body.getUnits();
         SootMethod method = body.getMethod();
 
-        if (!method.getSignature().contains("com.finedigital")) { return; }
+        if (!method.getSignature().contains("PACKAGENAME")) { return; }
         if (method.getName().equals("threadSleep")) { return; }
         if (method.getSignature().contains("lambda")) { return; }
 

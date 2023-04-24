@@ -21,7 +21,7 @@
         </rollingPolicy>
     </appender>
 
-    <logger name="com.finedigital.MyAgent" level="info">
+    <logger name="PACKAGENAME.MyAgent" level="info">
         <appender-ref ref="FILE" />
     </logger>
 </configuration>
