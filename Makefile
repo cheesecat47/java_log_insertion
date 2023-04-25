@@ -7,7 +7,7 @@ PACKAGE_NAME_AS_DIR := $(subst .,/,$(PACKAGE_NAME))
 AGENT_DIR := ./src/main/java/$(PACKAGE_NAME_AS_DIR)
 DOTFILE := ./callgraph.dot
 
-CLASS_PATHS := $(MANIPULATOR_DIR)/target/soot_profiler-1.0-SNAPSHOT-jar-with-dependencies.jar:$(SOURCE_DIR)/target/classes:./target/classes kr.ac.knu.isslab.MainDriver
+CLASS_PATHS := $(MANIPULATOR_DIR)/target/log_insertion-1.0-jar-with-dependencies.jar:$(SOURCE_DIR)/target/classes:./target/classes kr.ac.knu.isslab.MainDriver
 SOOT_OPTIONS := -w -process-dir $(SOURCE_DIR)/target/classes -keep-line-number -d $(MANIPULATOR_OUT_DIR)
 
 objects = $(WORKING_DIR) $(MANIPULATOR_DIR) $(MANIPULATOR_OUT_DIR) $(AGENT_DIR)
@@ -70,12 +70,12 @@ pre-build: clean config $(objects)
 
 build: pre-build
 	@echo "Build:"
-	java -Xmx4g -cp $(CLASS_PATHS) $(SOOT_OPTIONS) | tee soot_process.log
+	java -Xmx4g -cp $(CLASS_PATHS) $(SOOT_OPTIONS)
 	@echo ""
 
 build-jimple: pre-build
 	@echo "Build-Jimple:"
-	java -Xmx4g -cp $(CLASS_PATHS) $(SOOT_OPTIONS) -f J | tee soot_process.log
+	java -Xmx4g -cp $(CLASS_PATHS) $(SOOT_OPTIONS) -f J
 	@echo ""
 
 package: build

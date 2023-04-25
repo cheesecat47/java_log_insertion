@@ -6,8 +6,21 @@
 
 |       | Version | Note |
 |:-----:|:-------:|:----:|
-|  Java |   1.8   |      |
-| Maven |    ^3   |      |
+| Java  |   1.8   |      |
+| Maven |   ^3    |      |
+
+## Environments
+
+```bash
+cp .env.template .env
+vi .env
+
+SOURCE_DIR=./some_path/where_pom.xml/exist/
+PACKAGE_NAME=com.my.package
+```
+
+- SOURCE_DIR: Directory of maven project that you want to insert logs.
+- PACKAGE_NAME: package name of the source project.
 
 ## Run
 
@@ -15,6 +28,4 @@
 make package
 ```
 
-```bash
-scp -P 22345 $SOURCE_DIR/target/EQMDataCollector-v1.0.1.jar 39_honeypot:/home/isslab/Developer/log_metric_analyze_framework/target/eqms-v220603/eqms-data-collector/target
-```
+Use `log_insertion-1.0-jar-with-dependencies.jar` file under `target` directory.
